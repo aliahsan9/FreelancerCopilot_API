@@ -1,4 +1,5 @@
 ﻿using FreelancerCopilot.API.Data;
+using FreelancerCopilot.API.Helpers;
 using FreelancerCopilot.API.Models;
 using FreelancerCopilot.API.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -15,7 +16,9 @@ namespace FreelancerCopilot.API.Controllers
         private readonly AppDbContext _context;
         private readonly AiProposalService _aiService;
 
-        public ProposalsController(AppDbContext context, AiProposalService aiService)
+        public ProposalsController(
+            AppDbContext context,
+            AiProposalService aiService)
         {
             _context = context;
             _aiService = aiService;
@@ -24,25 +27,96 @@ namespace FreelancerCopilot.API.Controllers
         [HttpPost("generate/{jobId}")]
         public async Task<IActionResult> Generate(int jobId)
         {
-            var job = await _context.Jobs.FindAsync(jobId);
-
-            if (job == null)
-                return NotFound("Job not found");
-
-            // 🤖 AI GENERATION
-            var aiText = await _aiService.GenerateProposal(job);
-
-            var proposal = new Proposal
+            try
             {
-                JobId = jobId,
-                Content = aiText,
-                CreatedAt = DateTime.Now
-            };
+                var userId = UserHelper.GetUserId(User);
 
-            _context.Proposals.Add(proposal);
-            await _context.SaveChangesAsync();
+                var job = await _context.Jobs
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == jobId &&
+                        x.UserId == userId);
+
+                if (job == null)
+                    return NotFound("Job not found.");
+
+                var generatedProposal =
+                    await _aiService.GenerateProposal(job);
+
+                var proposal = new Proposal
+                {
+                    JobId = job.Id,
+                    UserId = userId,
+                    Content = generatedProposal,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Proposals.Add(proposal);
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    proposal.Id,
+                    proposal.Content,
+                    proposal.CreatedAt
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = ex.Message
+                });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMyProposals()
+        {
+            var userId = UserHelper.GetUserId(User);
+
+            var proposals = await _context.Proposals
+                .Where(x => x.UserId == userId)
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync();
+
+            return Ok(proposals);
+        }
+
+        [HttpGet("{id}")]
+        public async Task<IActionResult> Get(int id)
+        {
+            var userId = UserHelper.GetUserId(User);
+
+            var proposal = await _context.Proposals
+                .FirstOrDefaultAsync(x =>
+                    x.Id == id &&
+                    x.UserId == userId);
+
+            if (proposal == null)
+                return NotFound();
 
             return Ok(proposal);
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var userId = UserHelper.GetUserId(User);
+
+            var proposal = await _context.Proposals
+                .FirstOrDefaultAsync(x =>
+                    x.Id == id &&
+                    x.UserId == userId);
+
+            if (proposal == null)
+                return NotFound();
+
+            _context.Proposals.Remove(proposal);
+
+            await _context.SaveChangesAsync();
+
+            return Ok("Proposal deleted.");
         }
     }
 }

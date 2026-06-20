@@ -7,99 +7,122 @@ namespace FreelancerCopilot.API.Services
 {
     public class AiProposalService
     {
-        private readonly IConfiguration _config;
         private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<AiProposalService> _logger;
 
-        public AiProposalService(HttpClient httpClient, IConfiguration config)
+        public AiProposalService(
+            HttpClient httpClient,
+            IConfiguration configuration,
+            ILogger<AiProposalService> logger)
         {
             _httpClient = httpClient;
-            _config = config;
+            _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<string> GenerateProposal(Job job)
         {
-            var apiKey = _config["OpenAI:ApiKey"];
-            var model = _config["OpenAI:Model"];
+            if (job == null)
+                throw new ArgumentNullException(nameof(job));
+
+            var apiKey = _configuration["OpenAI:ApiKey"];
+            var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
 
             if (string.IsNullOrWhiteSpace(apiKey))
-                throw new Exception("OpenAI API key is missing.");
+                throw new Exception("OpenAI API Key not configured.");
 
-            var prompt = $@"
-You are a top 1% freelance proposal writer.
-
-Write a HIGH CONVERSION Upwork proposal.
-
-Job Title: {job.Title}
-Job Description: {job.Description}
-Budget: {job.Budget}
-
-Rules:
-- Be short (150-200 words)
-- Be persuasive but not spammy
-- Focus on client pain points
-- Mention ASP.NET Core + Angular experience
-- End with a question to engage client
-";
+            var prompt = BuildPrompt(job);
 
             var requestBody = new
             {
-                model = model,
+                model,
                 messages = new[]
                 {
-                    new { role = "system", content = "You are a senior freelance proposal expert." },
-                    new { role = "user", content = prompt }
+                    new
+                    {
+                        role = "system",
+                        content = "You are an expert Upwork proposal writer."
+                    },
+                    new
+                    {
+                        role = "user",
+                        content = prompt
+                    }
                 },
-                temperature = 0.7
+                temperature = 0.7,
+                max_tokens = 500
             };
 
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
+            var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                "https://api.openai.com/v1/chat/completions");
 
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            request.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", apiKey);
 
             request.Content = new StringContent(
                 JsonSerializer.Serialize(requestBody),
                 Encoding.UTF8,
-                "application/json"
-            );
+                "application/json");
 
-            var response = await _httpClient.SendAsync(request);
-            var responseJson = await response.Content.ReadAsStringAsync();
-
-            // ❌ Handle HTTP errors
-            if (!response.IsSuccessStatusCode)
+            try
             {
-                throw new Exception($"OpenAI API failed ({response.StatusCode}): {responseJson}");
+                var response = await _httpClient.SendAsync(request);
+
+                var json = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError(
+                        "OpenAI Error: {Status} {Response}",
+                        response.StatusCode,
+                        json);
+
+                    throw new Exception("AI service failed.");
+                }
+
+                using var document = JsonDocument.Parse(json);
+
+                var content =
+                    document.RootElement
+                    .GetProperty("choices")[0]
+                    .GetProperty("message")
+                    .GetProperty("content")
+                    .GetString();
+
+                return content ?? "Unable to generate proposal.";
             }
-
-            using var doc = JsonDocument.Parse(responseJson);
-            var root = doc.RootElement;
-
-            // ❌ Handle OpenAI error response
-            if (root.TryGetProperty("error", out var error))
+            catch (Exception ex)
             {
-                var errorMessage = error.GetProperty("message").GetString();
-                throw new Exception($"OpenAI Error: {errorMessage}");
+                _logger.LogError(ex, "Proposal generation failed");
+
+                throw new Exception(
+                    "Failed to generate proposal. Please try again.");
             }
+        }
 
-            // ❌ Validate structure safely
-            if (!root.TryGetProperty("choices", out var choices) ||
-                choices.GetArrayLength() == 0)
-            {
-                throw new Exception($"Invalid OpenAI response format: {responseJson}");
-            }
+        private static string BuildPrompt(Job job)
+        {
+            return $@"
+Write a professional Upwork proposal.
 
-            var firstChoice = choices[0];
+Job Title:
+{job.Title}
 
-            if (!firstChoice.TryGetProperty("message", out var messageObj) ||
-                !messageObj.TryGetProperty("content", out var content))
-            {
-                throw new Exception($"Missing message content in OpenAI response: {responseJson}");
-            }
+Job Description:
+{job.Description}
 
-            var aiContent = content.GetString();
+Budget:
+{job.Budget}
 
-            return aiContent ?? "No content generated by AI.";
+Requirements:
+- 150-200 words
+- Professional tone
+- Focus on client problems
+- Mention ASP.NET Core and Angular expertise when relevant
+- End with a question
+";
         }
     }
 }

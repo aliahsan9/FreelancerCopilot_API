@@ -1,17 +1,18 @@
-﻿namespace FreelancerCopilot.API.Models
+﻿using FreelancerCopilot.API.Models;
+
+public class Job
 {
-    public class Job
-    {
-        public int Id { get; set; }
+    public int Id { get; set; }
 
-        public string Title { get; set; }
-        public string Description { get; set; }
-        public string Budget { get; set; }
-        public string Source { get; set; }
+    public string Title { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public string Description { get; set; }
 
-        // 🔑 IMPORTANT: SaaS ownership
-        public string UserId { get; set; }
-    }
+    public string UserId { get; set; }
+    public decimal Budget { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    public ApplicationUser User { get; set; }
+
+    public ICollection<Proposal> Proposals { get; set; }
 }

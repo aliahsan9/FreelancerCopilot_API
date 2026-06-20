@@ -23,6 +23,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
 builder.Services.AddScoped<JwtTokenHelper>();
 builder.Services.AddScoped<AiProposalService>();
 builder.Services.AddHttpClient<AiProposalService>();
+builder.Services.AddScoped<UsageService>();
 
 // JWT Authentication
 builder.Services.AddAuthentication(options =>
