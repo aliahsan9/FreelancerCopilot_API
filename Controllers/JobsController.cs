@@ -1,4 +1,5 @@
 ﻿using FreelancerCopilot.API.Data;
+using FreelancerCopilot.API.Helpers;
 using FreelancerCopilot.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ namespace FreelancerCopilot.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize] // 🔒 secure everything
+    [Authorize]
     public class JobsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -21,47 +22,28 @@ namespace FreelancerCopilot.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
+            var userId = UserHelper.GetUserId(User);
+
             var jobs = await _context.Jobs
+                .Where(x => x.UserId == userId)
                 .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
 
             return Ok(jobs);
         }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> Get(int id)
-        {
-            var job = await _context.Jobs.FindAsync(id);
-
-            if (job == null)
-                return NotFound();
-
-            return Ok(job);
-        }
-
         [HttpPost]
         public async Task<IActionResult> Create(Job job)
         {
+            var userId = UserHelper.GetUserId(User);
+
+            job.UserId = userId;
             job.CreatedAt = DateTime.Now;
 
             _context.Jobs.Add(job);
             await _context.SaveChangesAsync();
 
             return Ok(job);
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
-        {
-            var job = await _context.Jobs.FindAsync(id);
-
-            if (job == null)
-                return NotFound();
-
-            _context.Jobs.Remove(job);
-            await _context.SaveChangesAsync();
-
-            return Ok("Deleted");
         }
     }
 }

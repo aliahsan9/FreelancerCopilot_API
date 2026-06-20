@@ -3,8 +3,12 @@
     public class Lead
     {
         public int Id { get; set; }
-        public string ClientName { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty; // New, Contacted, Won, Lost
+
+        public string ClientName { get; set; }
+        public string Status { get; set; }
+
         public int JobId { get; set; }
+
+        public string UserId { get; set; }
     }
 }

@@ -3,10 +3,15 @@
     public class Job
     {
         public int Id { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public string Budget { get; set; } = string.Empty;
-        public string Source { get; set; } = string.Empty; // Upwork/Fiverr etc
+
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public string Budget { get; set; }
+        public string Source { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        // 🔑 IMPORTANT: SaaS ownership
+        public string UserId { get; set; }
     }
 }
